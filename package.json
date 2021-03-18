@@ -17,7 +17,7 @@
     "javascript"
   ],
   "scripts": {
-    "dev": "gulp watch",
+    "dev": "nvm use 8 & gulp watch",
     "build": "gulp release",
     "dtslint": "dtslint types"
   },
