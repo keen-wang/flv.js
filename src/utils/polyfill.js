@@ -17,7 +17,9 @@
  */
 
 class Polyfill {
-
+    /**
+     * 兼容不支持es6方法的浏览器
+     */
     static install() {
         // ES6 Object.setPrototypeOf
         Object.setPrototypeOf = Object.setPrototypeOf || function (obj, proto) {

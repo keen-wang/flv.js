@@ -21,25 +21,25 @@ import AMF from './amf-parser.js';
 import SPSParser from './sps-parser.js';
 import DemuxErrors from './demux-errors.js';
 import MediaInfo from '../core/media-info.js';
-import {IllegalStateException} from '../utils/exception.js';
+import { IllegalStateException } from '../utils/exception.js';
 
 function Swap16(src) {
     return (((src >>> 8) & 0xFF) |
-            ((src & 0xFF) << 8));
+        ((src & 0xFF) << 8));
 }
 
 function Swap32(src) {
     return (((src & 0xFF000000) >>> 24) |
-            ((src & 0x00FF0000) >>> 8)  |
-            ((src & 0x0000FF00) << 8)   |
-            ((src & 0x000000FF) << 24));
+        ((src & 0x00FF0000) >>> 8) |
+        ((src & 0x0000FF00) << 8) |
+        ((src & 0x000000FF) << 24));
 }
 
 function ReadBig32(array, index) {
-    return ((array[index] << 24)     |
-            (array[index + 1] << 16) |
-            (array[index + 2] << 8)  |
-            (array[index + 3]));
+    return ((array[index] << 24) |
+        (array[index + 1] << 16) |
+        (array[index + 2] << 8) |
+        (array[index + 3]));
 }
 
 
@@ -98,14 +98,14 @@ class FLVDemuxer {
 
         this._mpegAudioV10SampleRateTable = [44100, 48000, 32000, 0];
         this._mpegAudioV20SampleRateTable = [22050, 24000, 16000, 0];
-        this._mpegAudioV25SampleRateTable = [11025, 12000, 8000,  0];
+        this._mpegAudioV25SampleRateTable = [11025, 12000, 8000, 0];
 
         this._mpegAudioL1BitRateTable = [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, -1];
-        this._mpegAudioL2BitRateTable = [0, 32, 48, 56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 384, -1];
-        this._mpegAudioL3BitRateTable = [0, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, -1];
+        this._mpegAudioL2BitRateTable = [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, -1];
+        this._mpegAudioL3BitRateTable = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, -1];
 
-        this._videoTrack = {type: 'video', id: 1, sequenceNumber: 0, samples: [], length: 0};
-        this._audioTrack = {type: 'audio', id: 2, sequenceNumber: 0, samples: [], length: 0};
+        this._videoTrack = { type: 'video', id: 1, sequenceNumber: 0, samples: [], length: 0 };
+        this._audioTrack = { type: 'audio', id: 2, sequenceNumber: 0, samples: [], length: 0 };
 
         this._littleEndian = (function () {
             let buf = new ArrayBuffer(2);
@@ -132,7 +132,7 @@ class FLVDemuxer {
 
     static probe(buffer) {
         let data = new Uint8Array(buffer);
-        let mismatch = {match: false};
+        let mismatch = { match: false };
 
         if (data[0] !== 0x46 || data[1] !== 0x4C || data[2] !== 0x56 || data[3] !== 0x01) {
             return mismatch;
@@ -570,7 +570,7 @@ class FLVDemuxer {
                 }
             } else if (aacData.packetType === 1) {  // AAC raw frame data
                 let dts = this._timestampBase + tagTimestamp;
-                let aacSample = {unit: aacData.data, length: aacData.data.byteLength, dts: dts, pts: dts};
+                let aacSample = { unit: aacData.data, length: aacData.data.byteLength, dts: dts, pts: dts };
                 track.samples.push(aacSample);
                 track.length += aacData.data.length;
             } else {
@@ -617,7 +617,7 @@ class FLVDemuxer {
                 return;
             }
             let dts = this._timestampBase + tagTimestamp;
-            let mp3Sample = {unit: data, length: data.byteLength, dts: dts, pts: dts};
+            let mp3Sample = { unit: data, length: data.byteLength, dts: dts, pts: dts };
             track.samples.push(mp3Sample);
             track.length += data.length;
         }
@@ -723,16 +723,16 @@ class FLVDemuxer {
             }
         }
 
-        config[0]  = audioObjectType << 3;
+        config[0] = audioObjectType << 3;
         config[0] |= (samplingIndex & 0x0F) >>> 1;
-        config[1]  = (samplingIndex & 0x0F) << 7;
+        config[1] = (samplingIndex & 0x0F) << 7;
         config[1] |= (channelConfig & 0x0F) << 3;
         if (audioObjectType === 5) {
             config[1] |= ((extensionSamplingIndex & 0x0F) >>> 1);
-            config[2]  = (extensionSamplingIndex & 0x01) << 7;
+            config[2] = (extensionSamplingIndex & 0x01) << 7;
             // extended audio object type: force to 2 (LC-AAC)
             config[2] |= (2 << 2);
-            config[3]  = 0;
+            config[3] = 0;
         }
 
         return {
@@ -1069,9 +1069,33 @@ class FLVDemuxer {
             if (unitType === 5) {  // IDR
                 keyframe = true;
             }
-
+            // //对SEI的判断逻辑
+            // // 如果 unitType===6 是SEI
+            // if (unitType === 6) {
+            //     console.log('unitType===6的SEI');
+            //     let payloadType = v.getUint8(offset + lengthSize + 1);
+            //     console.log('payloadType', payloadType);
+            //     //在国标中。sei payload type为5，为自定义消息
+            //     if (payloadType === 5) {
+            //         //解析SEI 开始，根据协议进行解码
+            //         let curOffset = offset + lengthSize + 2;
+            //         let payloadContentLenght = v.getUint8(curOffset);
+            //         console.log('payloadContentLenght', payloadContentLenght);
+            //         // uuid 16个字节 + content data
+            //         let uuid = '';
+            //         for (let i = 1; i <= 16; i++) {
+            //             uuid += v.getUint8(++curOffset);
+            //         }
+            //         console.log('uuid', uuid);
+            //         let payloadContentDataLenght = payloadContentLenght - 16;
+            //         //此处可以添加自己约定的解析逻辑，然后再导出
+            //         dataContent = new Uint8Array(arrayBuffer, dataOffset + curOffset, payloadContentDataLenght);
+            //          let result = {data: '解析的SEI数据结束', dataContent};
+            //         exportVideoTrack(result);
+            //     }
+            // }
             let data = new Uint8Array(arrayBuffer, dataOffset + offset, lengthSize + naluSize);
-            let unit = {type: unitType, data: data};
+            let unit = { type: unitType, data: data };
             units.push(unit);
             length += data.byteLength;
 

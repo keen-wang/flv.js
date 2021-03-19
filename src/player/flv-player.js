@@ -24,17 +24,22 @@ import Transmuxer from '../core/transmuxer.js';
 import TransmuxingEvents from '../core/transmuxing-events.js';
 import MSEController from '../core/mse-controller.js';
 import MSEEvents from '../core/mse-events.js';
-import {ErrorTypes, ErrorDetails} from './player-errors.js';
-import {createDefaultConfig} from '../config.js';
-import {InvalidArgumentException, IllegalStateException} from '../utils/exception.js';
+import { ErrorTypes, ErrorDetails } from './player-errors.js';
+import { createDefaultConfig } from '../config.js';
+import { InvalidArgumentException, IllegalStateException } from '../utils/exception.js';
 
 class FlvPlayer {
-
+    /**
+     * 
+     * @param {*} mediaDataSource 含属性type和src
+     * @param {*} config 可配置参数
+     */
     constructor(mediaDataSource, config) {
         this.TAG = 'FlvPlayer';
         this._type = 'FlvPlayer';
+        // 1. 创建事件监听
         this._emitter = new EventEmitter();
-
+        // 获取配置参数
         this._config = createDefaultConfig();
         if (typeof config === 'object') {
             Object.assign(this._config, config);
@@ -44,10 +49,11 @@ class FlvPlayer {
             throw new InvalidArgumentException('FlvPlayer requires an flv MediaDataSource input!');
         }
 
+        // 判断数据源是否为实时流
         if (mediaDataSource.isLive === true) {
             this._config.isLive = true;
         }
-
+        // 初始化将要绑定的事件处理
         this.e = {
             onvLoadedMetadata: this._onvLoadedMetadata.bind(this),
             onvSeeking: this._onvSeeking.bind(this),
@@ -56,11 +62,13 @@ class FlvPlayer {
             onvProgress: this._onvProgress.bind(this)
         };
 
+        // now方法获取一个表示从性能测量时刻开始经过的毫秒数
         if (self.performance && self.performance.now) {
             this._now = self.performance.now.bind(self.performance);
         } else {
             this._now = Date.now;
         }
+
 
         this._pendingSeekTime = null;  // in seconds
         this._requestSetTime = false;
@@ -68,22 +76,22 @@ class FlvPlayer {
         this._progressChecker = null;
 
         this._mediaDataSource = mediaDataSource;
-        this._mediaElement = null;
+        this._mediaElement = null; // video标签元素
         this._msectl = null;
         this._transmuxer = null;
 
-        this._mseSourceOpened = false;
-        this._hasPendingLoad = false;
+        this._mseSourceOpened = false; // 标识MSE是否已经触发 source open
+        this._hasPendingLoad = false; // 是否在等待source open事件处理，然后继续进行load()
         this._receivedCanPlay = false;
 
         this._mediaInfo = null;
         this._statisticsInfo = null;
 
+        // accurateSeek 精确地查找任何帧，不限于视频IDR帧，但可能会稍微慢一些。可在Chrome>50、FireFox和Safari上使用。
         let chromeNeedIDRFix = (Browser.chrome &&
-                               (Browser.version.major < 50 ||
-                               (Browser.version.major === 50 && Browser.version.build < 2661)));
+            (Browser.version.major < 50 ||
+                (Browser.version.major === 50 && Browser.version.build < 2661)));
         this._alwaysSeekKeyframe = (chromeNeedIDRFix || Browser.msedge || Browser.msie) ? true : false;
-
         if (this._alwaysSeekKeyframe) {
             this._config.accurateSeek = false;
         }
@@ -127,7 +135,10 @@ class FlvPlayer {
     off(event, listener) {
         this._emitter.removeListener(event, listener);
     }
-
+    /**
+     * 加强video元素功能
+     * @param {*} mediaElement 
+     */
     attachMediaElement(mediaElement) {
         this._mediaElement = mediaElement;
         mediaElement.addEventListener('loadedmetadata', this.e.onvLoadedMetadata);
@@ -141,6 +152,7 @@ class FlvPlayer {
         this._msectl.on(MSEEvents.UPDATE_END, this._onmseUpdateEnd.bind(this));
         this._msectl.on(MSEEvents.BUFFER_FULL, this._onmseBufferFull.bind(this));
         this._msectl.on(MSEEvents.SOURCE_OPEN, () => {
+            // config.deferLoadAfterSourceOpen 这个参数设为true时要等待到source open事件触发后才能完成load()
             this._mseSourceOpened = true;
             if (this._hasPendingLoad) {
                 this._hasPendingLoad = false;
@@ -149,14 +161,15 @@ class FlvPlayer {
         });
         this._msectl.on(MSEEvents.ERROR, (info) => {
             this._emitter.emit(PlayerEvents.ERROR,
-                               ErrorTypes.MEDIA_ERROR,
-                               ErrorDetails.MEDIA_MSE_ERROR,
-                               info
+                ErrorTypes.MEDIA_ERROR,
+                ErrorDetails.MEDIA_MSE_ERROR,
+                info
             );
         });
 
         this._msectl.attachMediaElement(mediaElement);
 
+        // 设置currentTime
         if (this._pendingSeekTime != null) {
             try {
                 mediaElement.currentTime = this._pendingSeekTime;
@@ -184,17 +197,22 @@ class FlvPlayer {
         }
     }
 
+    /**
+     * 
+     * @returns 
+     */
     load() {
         if (!this._mediaElement) {
             throw new IllegalStateException('HTMLMediaElement must be attached before load()!');
         }
+        // 判断是否已经被调用load()
         if (this._transmuxer) {
             throw new IllegalStateException('FlvPlayer.load() has been called, please call unload() first!');
         }
         if (this._hasPendingLoad) {
             return;
         }
-
+        // deferLoadAfterSourceOpen 强制取消load,等待到sourceopen事件触发再重新调用load(),_hasPendingLoad用来判断是否在等待中
         if (this._config.deferLoadAfterSourceOpen && this._mseSourceOpened === false) {
             this._hasPendingLoad = true;
             return;
@@ -206,11 +224,15 @@ class FlvPlayer {
             this._mediaElement.currentTime = 0;
         }
 
+        // 转码器
         this._transmuxer = new Transmuxer(this._mediaDataSource, this._config);
 
         this._transmuxer.on(TransmuxingEvents.INIT_SEGMENT, (type, is) => {
             this._msectl.appendInitSegment(is);
         });
+        /**
+         * 抛出MSE的事件
+         */
         this._transmuxer.on(TransmuxingEvents.MEDIA_SEGMENT, (type, ms) => {
             this._msectl.appendMediaSegment(ms);
 
@@ -236,7 +258,7 @@ class FlvPlayer {
             this._emitter.emit(PlayerEvents.ERROR, ErrorTypes.NETWORK_ERROR, detail, info);
         });
         this._transmuxer.on(TransmuxingEvents.DEMUX_ERROR, (detail, info) => {
-            this._emitter.emit(PlayerEvents.ERROR, ErrorTypes.MEDIA_ERROR, detail, {code: -1, msg: info});
+            this._emitter.emit(PlayerEvents.ERROR, ErrorTypes.MEDIA_ERROR, detail, { code: -1, msg: info });
         });
         this._transmuxer.on(TransmuxingEvents.MEDIA_INFO, (mediaInfo) => {
             this._mediaInfo = mediaInfo;
@@ -470,7 +492,7 @@ class FlvPlayer {
         if (directSeekBegin) {  // seek to video begin, set currentTime directly if beginPTS buffered
             this._requestSetTime = true;
             this._mediaElement.currentTime = directSeekBeginTime;
-        }  else if (directSeek) {  // buffered position
+        } else if (directSeek) {  // buffered position
             if (!this._alwaysSeekKeyframe) {
                 this._requestSetTime = true;
                 this._mediaElement.currentTime = seconds;
