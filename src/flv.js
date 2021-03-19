@@ -89,14 +89,14 @@ Object.defineProperty(flvjs, 'version', {
     }
 });
 
-// //导出视频的回调函数
-// export let exportVideoTrack = () => {};
+//导出视频的回调函数
+export let exportVideoTrack = () => {};
 
-// function setExportVideoTrack(callback) {
-//     console.log('设置导出视频的回调函数成功');
-//     exportVideoTrack = callback;
-// }
-// //挂载设置回调函数方法
-// flvjs.setExportVideoTrackFunction = setExportVideoTrack;
+function setExportVideoTrack(callback) {
+    console.log('设置导出视频的回调函数成功');
+    exportVideoTrack = callback;
+}
+//挂载设置回调函数方法
+flvjs.setExportVideoTrackFunction = setExportVideoTrack;
 
 export default flvjs;

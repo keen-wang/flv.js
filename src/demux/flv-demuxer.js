@@ -22,6 +22,7 @@ import SPSParser from './sps-parser.js';
 import DemuxErrors from './demux-errors.js';
 import MediaInfo from '../core/media-info.js';
 import { IllegalStateException } from '../utils/exception.js';
+import { exportVideoTrack } from '../flv.js';
 
 function Swap16(src) {
     return (((src >>> 8) & 0xFF) |
@@ -134,6 +135,8 @@ class FLVDemuxer {
         let data = new Uint8Array(buffer);
         let mismatch = { match: false };
 
+        // 0x46 0x4c 0x56 这几个数字其实就是 'F' 'L' 'V' 的ascii码，表示flv文件头
+        // 0x01是flv格式的版本号，用这来检测数据是不是 flv 格式。
         if (data[0] !== 0x46 || data[1] !== 0x4C || data[2] !== 0x56 || data[3] !== 0x01) {
             return mismatch;
         }
@@ -1070,30 +1073,37 @@ class FLVDemuxer {
                 keyframe = true;
             }
             // //对SEI的判断逻辑
-            // // 如果 unitType===6 是SEI
-            // if (unitType === 6) {
-            //     console.log('unitType===6的SEI');
-            //     let payloadType = v.getUint8(offset + lengthSize + 1);
-            //     console.log('payloadType', payloadType);
-            //     //在国标中。sei payload type为5，为自定义消息
-            //     if (payloadType === 5) {
-            //         //解析SEI 开始，根据协议进行解码
-            //         let curOffset = offset + lengthSize + 2;
-            //         let payloadContentLenght = v.getUint8(curOffset);
-            //         console.log('payloadContentLenght', payloadContentLenght);
-            //         // uuid 16个字节 + content data
-            //         let uuid = '';
-            //         for (let i = 1; i <= 16; i++) {
-            //             uuid += v.getUint8(++curOffset);
-            //         }
-            //         console.log('uuid', uuid);
-            //         let payloadContentDataLenght = payloadContentLenght - 16;
-            //         //此处可以添加自己约定的解析逻辑，然后再导出
-            //         dataContent = new Uint8Array(arrayBuffer, dataOffset + curOffset, payloadContentDataLenght);
-            //          let result = {data: '解析的SEI数据结束', dataContent};
-            //         exportVideoTrack(result);
-            //     }
-            // }
+            // 如果 unitType===6 是SEI
+            if (unitType === 6) {
+                console.log('unitType===6的SEI');
+                let payloadType = v.getUint8(offset + lengthSize + 1);
+                console.log('payloadType', payloadType);
+                //在国标中。sei payload type为5，为自定义消息
+                if (payloadType === 5) {
+                    //解析SEI 开始，根据协议进行解码
+                    let curOffset = offset + lengthSize + 2;
+                    let payloadContentLenght = v.getUint8(curOffset);
+                    console.log('payloadContentLenght', payloadContentLenght);
+                    // uuid 16个字节 + content data
+                    let uuid = '';
+                    for (let i = 1; i <= 16; i++) {
+                        uuid += v.getUint8(++curOffset);
+                    }
+                    console.log('uuid', uuid);
+                    let payloadContentDataLenght = payloadContentLenght - 16;
+                    //此处可以添加自己约定的解析逻辑，然后再导出
+                    console.log('arrayBuffer', arrayBuffer.toString());
+                    let dataContent = new Uint8Array(arrayBuffer, dataOffset + curOffset, payloadContentDataLenght);
+                    let result = { data: '解析的SEI数据结束', content: dataContent };
+                    try {
+                        if (exportVideoTrack) {
+                            exportVideoTrack(result);
+                        }
+                    } catch (error) {
+                        console.log('error', error);
+                    }
+                }
+            }
             let data = new Uint8Array(arrayBuffer, dataOffset + offset, lengthSize + naluSize);
             let unit = { type: unitType, data: data };
             units.push(unit);
